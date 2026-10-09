@@ -95,6 +95,7 @@ swift run RFGEN44App                    # debug GUI
 swift run rfgen44 -l -i -r              # CLI against the connected device (read-only)
 VERSION=0.1.0 scripts/build-app.sh      # universal dist/RFGEN44.app (+ dist/rfgen44)
 scripts/install-local.sh                # build + copy to /Applications
+scripts/setup-signing-secrets.sh        # owner, interactive: export cert + set GitHub secrets
 VERSION=0.1.0 scripts/package-signed.sh # signed + notarised DMG (ad-hoc without secrets)
 git tag v0.1.0 && git push origin v0.1.0  # CI release (.github/workflows/release.yml)
 ```

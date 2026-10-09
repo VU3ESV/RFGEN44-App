@@ -24,22 +24,31 @@ them, the script still builds the DMG but leaves it ad-hoc signed.
 The notary secrets can be the same values the sibling apps use. The CI
 keychain holds only the one imported cert, so the script selects it by name.
 
-## Choosing the certificate
+## The certificate
 
-The sibling apps each use their own Developer ID Application cert under team
-`Y6FT52BKDA`, so revoking one does not affect the others. Apple allows at most
-five Developer ID Application certs per team, and the dev Mac already holds
-five, so either:
+RFGEN44 **reuses LP-700-App's** Developer ID Application cert, SHA-1
+`A59B8647CA9706C6E8CDBB461C9801CF715132C4`. The team already has five
+Developer ID Application certs, which is Apple's limit. Revoking the LP-700
+cert stops both apps from signing new releases; releases already notarized
+keep working.
 
-- export one of the existing certs for RFGEN44 too, or
-- revoke an unused one in the developer portal and create a dedicated
-  RFGEN44 cert.
+All of the team's current certs expire on **2027-02-01**. After renewing,
+re-run the wizard below with `CERT_SHA1=<new sha1>`.
 
-## Exporting the `.p12` and setting the secrets
+## Setting the secrets
 
-Keychain Access → **login** keychain → **My Certificates** → the chosen
-`Developer ID Application` → right-click → **Export…** → `.p12`, set a
-password. Then, from this repo:
+Run the wizard from this repo, in your own terminal:
+
+```sh
+scripts/setup-signing-secrets.sh
+```
+
+It walks you through exporting the cert from Keychain Access as a `.p12`. It
+checks the file by importing it into a throwaway keychain, as CI does, and
+asks Apple to confirm the notary credentials. Then it writes all six secrets
+with `gh` and offers to delete the `.p12`.
+
+By hand, after exporting the `.p12`:
 
 ```sh
 base64 -i RFGEN44.p12 | gh secret set MACOS_CERT_P12_BASE64
