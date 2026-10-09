@@ -1,0 +1,44 @@
+{
+    "configurations": [
+        {
+            "type": "swift",
+            "request": "launch",
+            "args": [],
+            "cwd": "${workspaceFolder:RFGEN44-App}",
+            "name": "Debug RFGEN44App",
+            "target": "RFGEN44App",
+            "configuration": "debug",
+            "preLaunchTask": "swift: Build Debug RFGEN44App"
+        },
+        {
+            "type": "swift",
+            "request": "launch",
+            "args": [],
+            "cwd": "${workspaceFolder:RFGEN44-App}",
+            "name": "Release RFGEN44App",
+            "target": "RFGEN44App",
+            "configuration": "release",
+            "preLaunchTask": "swift: Build Release RFGEN44App"
+        },
+        {
+            "type": "swift",
+            "request": "launch",
+            "args": [],
+            "cwd": "${workspaceFolder:RFGEN44-App}",
+            "name": "Debug rfgen44",
+            "target": "rfgen44",
+            "configuration": "debug",
+            "preLaunchTask": "swift: Build Debug rfgen44"
+        },
+        {
+            "type": "swift",
+            "request": "launch",
+            "args": [],
+            "cwd": "${workspaceFolder:RFGEN44-App}",
+            "name": "Release rfgen44",
+            "target": "rfgen44",
+            "configuration": "release",
+            "preLaunchTask": "swift: Build Release rfgen44"
+        }
+    ]
+}
