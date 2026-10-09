@@ -62,15 +62,20 @@ rm RFGEN44.p12
 
 ## Cutting a release
 
+**Merging a PR to `main` publishes the next patch version** (0.1.0 → 0.1.1)
+automatically. Merges that only touch markdown, `docs/`, `LICENSE`,
+`.github/` or `.vscode/` are skipped. For a minor or major version, push the
+tag yourself, or run the workflow:
+
 ```sh
-git tag v0.1.0 && git push origin v0.1.0      # or:
-gh workflow run release.yml -f version=0.1.0  # tags the current main
+git tag v0.2.0 && git push origin v0.2.0      # or:
+gh workflow run release.yml -f version=0.2.0  # tags the current main
 ```
 
-The release gets `RFGEN44-<version>.dmg`, its `.sha256`, and notes that pull in
-that version's [CHANGELOG](../CHANGELOG.md) section. The repo is private, so
-only collaborators can download it, and each run spends macOS minutes from
-the private-repo quota.
+The release gets `RFGEN44-<version>.dmg`, its `.sha256`, and notes listing the
+merged PRs plus that version's [CHANGELOG](../CHANGELOG.md) section, if it has
+one. The repo is public, so anyone can download releases, and Actions minutes
+are free.
 
 ## Notarization alternative (App Store Connect API key)
 
