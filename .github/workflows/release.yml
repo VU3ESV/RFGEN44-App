@@ -1,0 +1,168 @@
+name: Release
+
+# Builds a Developer ID-signed, Apple-notarized RFGEN44 DMG and publishes it as a
+# GitHub Release. Triggered two ways:
+#   1. Push a `vX.Y.Z` tag — uses the tag as-is.
+#   2. Manual `workflow_dispatch` with a version input — creates the matching
+#      `vX.Y.Z` tag at the run's commit. Set `prerelease: true` to keep it out
+#      of "latest".
+#
+# Deliberately NOT triggered by pushes to main (unlike the sibling apps): this
+# repo is private, and macOS runner minutes come out of the private-repo quota.
+#
+# Requires the signing + notary secrets in docs/SIGNING-SECRETS.md; the run
+# fails fast without them rather than publishing an unsigned build.
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Version, e.g. 0.1.0 (no leading v). Tag vX.Y.Z is created at this commit.'
+        required: true
+        type: string
+      prerelease:
+        description: 'Mark this release as a pre-release (so it does not become "latest").'
+        required: false
+        type: boolean
+        default: false
+
+# One release run at a time per ref.
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: macos-15
+    timeout-minutes: 40
+    steps:
+      - name: Check signing secrets
+        env:
+          MACOS_CERT_P12_BASE64: ${{ secrets.MACOS_CERT_P12_BASE64 }}
+          MACOS_CERT_PASSWORD: ${{ secrets.MACOS_CERT_PASSWORD }}
+          NOTARY_APPLE_ID: ${{ secrets.NOTARY_APPLE_ID }}
+          NOTARY_TEAM_ID: ${{ secrets.NOTARY_TEAM_ID }}
+          NOTARY_PASSWORD: ${{ secrets.NOTARY_PASSWORD }}
+        run: |
+          missing=""
+          for s in MACOS_CERT_P12_BASE64 MACOS_CERT_PASSWORD NOTARY_APPLE_ID NOTARY_TEAM_ID NOTARY_PASSWORD; do
+            [ -n "${!s}" ] || missing="$missing $s"
+          done
+          if [ -n "$missing" ]; then
+            echo "::error::Missing secrets:$missing — see docs/SIGNING-SECRETS.md"
+            exit 1
+          fi
+
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+
+      - name: Resolve version + tag
+        id: ver
+        env:
+          INPUT_VERSION: ${{ inputs.version }}
+        run: |
+          set -euo pipefail
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            V="${INPUT_VERSION#[vV]}"
+            if git rev-parse -q --verify "refs/tags/v$V" >/dev/null; then
+              echo "::error::Tag v$V already exists. Push a new tag or pick another version."
+              exit 1
+            fi
+          else
+            V="${GITHUB_REF_NAME#v}"
+          fi
+          if ! [[ "$V" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo "::error::Version '$V' is not X.Y.Z"
+            exit 1
+          fi
+          echo "value=$V" >> "$GITHUB_OUTPUT"
+          echo "tag=v$V" >> "$GITHUB_OUTPUT"
+          echo "Building release v$V"
+
+      - name: Select newest stable Xcode
+        run: |
+          XCODE="$(ls -d /Applications/Xcode_*.app | grep -vi beta | sort -V | tail -1)"
+          sudo xcode-select -s "$XCODE"
+          xcodebuild -version
+          swift --version
+
+      - name: Test
+        run: swift test
+
+      - name: Build signed + notarized DMG
+        env:
+          VERSION: ${{ steps.ver.outputs.value }}
+          MACOS_CERT_P12_BASE64: ${{ secrets.MACOS_CERT_P12_BASE64 }}
+          MACOS_CERT_PASSWORD: ${{ secrets.MACOS_CERT_PASSWORD }}
+          KEYCHAIN_PASSWORD: ${{ secrets.KEYCHAIN_PASSWORD }}
+          NOTARY_APPLE_ID: ${{ secrets.NOTARY_APPLE_ID }}
+          NOTARY_TEAM_ID: ${{ secrets.NOTARY_TEAM_ID }}
+          NOTARY_PASSWORD: ${{ secrets.NOTARY_PASSWORD }}
+        run: ./scripts/package-signed.sh
+
+      - name: Compute checksum
+        working-directory: dist
+        run: |
+          shasum -a 256 RFGEN44-${{ steps.ver.outputs.value }}.dmg \
+            > RFGEN44-${{ steps.ver.outputs.value }}.dmg.sha256
+          cat RFGEN44-${{ steps.ver.outputs.value }}.dmg.sha256
+
+      - name: Upload artifact (workflow-scoped, for in-flight inspection)
+        uses: actions/upload-artifact@v7
+        with:
+          name: RFGEN44-${{ steps.ver.outputs.value }}
+          path: |
+            dist/RFGEN44-*.dmg
+            dist/RFGEN44-*.dmg.sha256
+          retention-days: 7
+
+      - name: Compose release notes
+        env:
+          V: ${{ steps.ver.outputs.value }}
+          REPO: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+          {
+            echo "## RFGEN44 ${V}"
+            echo
+            echo "Native macOS app and \`rfgen44\` CLI for the CircuitValley RFGEN44 USB RF signal generator."
+            echo
+            echo "### Install"
+            echo
+            echo "1. Download \`RFGEN44-${V}.dmg\` below (macOS 14 or later, Apple silicon or Intel)."
+            echo "2. Open the DMG and drag **RFGEN44.app** to **Applications**."
+            echo "3. Launch it — signed with Developer ID and Apple-notarized."
+            echo
+            echo "The CLI is inside the app: \`sudo ln -sf /Applications/RFGEN44.app/Contents/Helpers/rfgen44 /usr/local/bin/rfgen44\`"
+            echo
+            # This version's CHANGELOG section, if there is one.
+            notes="$(awk -v h="## ${V}" 'index($0, h " ") == 1 || $0 == h { f = 1; next } /^## / && f { exit } f' CHANGELOG.md)"
+            if [ -n "$notes" ]; then
+              echo "### Changes"
+              echo "$notes"
+              echo
+            fi
+            echo "See the [README](https://github.com/${REPO}#readme)."
+          } > dist/RELEASE_NOTES.md
+          cat dist/RELEASE_NOTES.md
+
+      - name: Create GitHub release
+        uses: softprops/action-gh-release@v3
+        with:
+          name: ${{ steps.ver.outputs.value }}
+          tag_name: ${{ steps.ver.outputs.tag }}
+          target_commitish: ${{ github.sha }}
+          draft: false
+          prerelease: ${{ inputs.prerelease == true }}
+          generate_release_notes: true
+          body_path: dist/RELEASE_NOTES.md
+          files: |
+            dist/RFGEN44-*.dmg
+            dist/RFGEN44-*.dmg.sha256
