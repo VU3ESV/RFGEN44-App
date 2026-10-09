@@ -1,20 +1,21 @@
 name: Release
 
 # Builds a Developer ID-signed, Apple-notarized RFGEN44 DMG and publishes it as a
-# GitHub Release. Triggered two ways:
-#   1. Push a `vX.Y.Z` tag — uses the tag as-is.
-#   2. Manual `workflow_dispatch` with a version input — creates the matching
+# GitHub Release. Triggered three ways, as in the sibling apps:
+#   1. Push to `main` (i.e. a merged PR) — bumps the latest `vX.Y.Z` tag by
+#      $BUMP and releases the merge commit. Skipped when the push changes
+#      nothing that ships: only markdown, docs/, LICENSE, .github/ or .vscode/.
+#   2. Push a `vX.Y.Z` tag — uses the tag as-is.
+#   3. Manual `workflow_dispatch` with a version input — creates the matching
 #      `vX.Y.Z` tag at the run's commit. Set `prerelease: true` to keep it out
 #      of "latest".
-#
-# Deliberately NOT triggered by pushes to main (unlike the sibling apps): this
-# repo is private, and macOS runner minutes come out of the private-repo quota.
 #
 # Requires the signing + notary secrets in docs/SIGNING-SECRETS.md; the run
 # fails fast without them rather than publishing an unsigned build.
 
 on:
   push:
+    branches: [main]
     tags:
       - 'v*'
   workflow_dispatch:
@@ -29,7 +30,8 @@ on:
         type: boolean
         default: false
 
-# One release run at a time per ref.
+# One release run at a time per ref. Two PRs merging back-to-back queue
+# rather than race for the same next-version tag.
 concurrency:
   group: release-${{ github.ref }}
   cancel-in-progress: false
@@ -37,8 +39,87 @@ concurrency:
 permissions:
   contents: write
 
+env:
+  # Auto-bump for push-to-main runs: patch | minor | major. Tag pushes and
+  # workflow_dispatch use their version verbatim.
+  BUMP: patch
+
 jobs:
+  # Cheap Linux job: decides whether to release and which version, so a
+  # docs-only merge never starts a macOS runner.
+  plan:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    outputs:
+      skip: ${{ steps.ver.outputs.skip }}
+      version: ${{ steps.ver.outputs.value }}
+      tag: ${{ steps.ver.outputs.tag }}
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+
+      - name: Resolve version + tag
+        id: ver
+        env:
+          INPUT_VERSION: ${{ inputs.version }}
+          BEFORE: ${{ github.event.before }}
+        run: |
+          set -euo pipefail
+          skip() { echo "::notice::$1 — no release."; echo "skip=true" >> "$GITHUB_OUTPUT"; exit 0; }
+          bump() {
+            IFS=. read -r MAJOR MINOR PATCH <<< "$1"
+            case "$BUMP" in
+              major) echo "$((MAJOR + 1)).0.0" ;;
+              minor) echo "$MAJOR.$((MINOR + 1)).0" ;;
+              *)     echo "$MAJOR.$MINOR.$((PATCH + 1))" ;;
+            esac
+          }
+
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            V="${INPUT_VERSION#[vV]}"
+            if git rev-parse -q --verify "refs/tags/v$V" >/dev/null; then
+              echo "::error::Tag v$V already exists. Push a new tag or pick another version."
+              exit 1
+            fi
+          elif [[ "$GITHUB_REF" == refs/tags/* ]]; then
+            V="${GITHUB_REF_NAME#v}"
+          else
+            # Push to main. A tag pushed with it releases via its own run.
+            if git tag --points-at HEAD | grep -Eq '^v[0-9]+\.[0-9]+\.[0-9]+$'; then
+              skip "HEAD already has a release tag"
+            fi
+            # Nothing shipped changed? An unknown diff (e.g. force-push) releases.
+            if files="$(git diff --name-only "$BEFORE" HEAD 2>/dev/null)" && [ -n "$files" ]; then
+              echo "Changed files:"; printf '  %s\n' $files
+              shipped=false
+              while IFS= read -r f; do
+                case "$f" in
+                  *.md|docs/*|LICENSE|.github/*|.vscode/*) ;;
+                  *) shipped=true; break ;;
+                esac
+              done <<< "$files"
+              [ "$shipped" = true ] || skip "Only docs / CI files changed"
+            fi
+            LATEST="$(git tag --list 'v*' | grep -E '^v[0-9]+\.[0-9]+\.[0-9]+$' | sort -V | tail -1 || true)"
+            V="$(bump "${LATEST#v}")"
+            [ -n "$LATEST" ] || V="0.1.0"
+            while git rev-parse -q --verify "refs/tags/v$V" >/dev/null; do V="$(bump "$V")"; done
+          fi
+
+          if ! [[ "$V" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo "::error::Version '$V' is not X.Y.Z"
+            exit 1
+          fi
+          echo "skip=false" >> "$GITHUB_OUTPUT"
+          echo "value=$V" >> "$GITHUB_OUTPUT"
+          echo "tag=v$V" >> "$GITHUB_OUTPUT"
+          echo "Releasing v$V"
+
   release:
+    needs: plan
+    if: needs.plan.outputs.skip != 'true'
     runs-on: macos-15
     timeout-minutes: 40
     steps:
@@ -60,31 +141,6 @@ jobs:
           fi
 
       - uses: actions/checkout@v6
-        with:
-          fetch-depth: 0
-
-      - name: Resolve version + tag
-        id: ver
-        env:
-          INPUT_VERSION: ${{ inputs.version }}
-        run: |
-          set -euo pipefail
-          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
-            V="${INPUT_VERSION#[vV]}"
-            if git rev-parse -q --verify "refs/tags/v$V" >/dev/null; then
-              echo "::error::Tag v$V already exists. Push a new tag or pick another version."
-              exit 1
-            fi
-          else
-            V="${GITHUB_REF_NAME#v}"
-          fi
-          if ! [[ "$V" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
-            echo "::error::Version '$V' is not X.Y.Z"
-            exit 1
-          fi
-          echo "value=$V" >> "$GITHUB_OUTPUT"
-          echo "tag=v$V" >> "$GITHUB_OUTPUT"
-          echo "Building release v$V"
 
       - name: Select newest stable Xcode
         run: |
@@ -98,7 +154,7 @@ jobs:
 
       - name: Build signed + notarized DMG
         env:
-          VERSION: ${{ steps.ver.outputs.value }}
+          VERSION: ${{ needs.plan.outputs.version }}
           MACOS_CERT_P12_BASE64: ${{ secrets.MACOS_CERT_P12_BASE64 }}
           MACOS_CERT_PASSWORD: ${{ secrets.MACOS_CERT_PASSWORD }}
           KEYCHAIN_PASSWORD: ${{ secrets.KEYCHAIN_PASSWORD }}
@@ -110,14 +166,14 @@ jobs:
       - name: Compute checksum
         working-directory: dist
         run: |
-          shasum -a 256 RFGEN44-${{ steps.ver.outputs.value }}.dmg \
-            > RFGEN44-${{ steps.ver.outputs.value }}.dmg.sha256
-          cat RFGEN44-${{ steps.ver.outputs.value }}.dmg.sha256
+          shasum -a 256 RFGEN44-${{ needs.plan.outputs.version }}.dmg \
+            > RFGEN44-${{ needs.plan.outputs.version }}.dmg.sha256
+          cat RFGEN44-${{ needs.plan.outputs.version }}.dmg.sha256
 
       - name: Upload artifact (workflow-scoped, for in-flight inspection)
         uses: actions/upload-artifact@v7
         with:
-          name: RFGEN44-${{ steps.ver.outputs.value }}
+          name: RFGEN44-${{ needs.plan.outputs.version }}
           path: |
             dist/RFGEN44-*.dmg
             dist/RFGEN44-*.dmg.sha256
@@ -125,7 +181,7 @@ jobs:
 
       - name: Compose release notes
         env:
-          V: ${{ steps.ver.outputs.value }}
+          V: ${{ needs.plan.outputs.version }}
           REPO: ${{ github.repository }}
         run: |
           set -euo pipefail
@@ -156,8 +212,8 @@ jobs:
       - name: Create GitHub release
         uses: softprops/action-gh-release@v3
         with:
-          name: ${{ steps.ver.outputs.value }}
-          tag_name: ${{ steps.ver.outputs.tag }}
+          name: ${{ needs.plan.outputs.version }}
+          tag_name: ${{ needs.plan.outputs.tag }}
           target_commitish: ${{ github.sha }}
           draft: false
           prerelease: ${{ inputs.prerelease == true }}

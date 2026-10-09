@@ -36,11 +36,9 @@ layouts, adding a command, or debugging device behaviour.
 - [ ] M4 — Firmware 2.x: confirm macro RF-flag encoding and whether
       SET_MACRO alone enables the macro (see Open questions); then lock the
       default.
-- [ ] M5 — Distribution: tag-triggered release workflow (Developer ID
-      signing, notarisation, DMG) is in place, gated on the secrets in
-      [docs/SIGNING-SECRETS.md](docs/SIGNING-SECRETS.md). Done when the
-      secrets are set and v0.1.0 ships notarised. No per-push CI: macOS
-      runners cost private-repo minutes — confirm with the owner first.
+- [x] M5 — Distribution: Developer ID signing + notarisation, DMG, GitHub
+      Release (v0.1.0 shipped notarised 2026-10-09), CI on PRs. Signing
+      setup: [docs/SIGNING-SECRETS.md](docs/SIGNING-SECRETS.md).
 - [ ] M6 — Optional: MenuBarExtra (RF toggle + frequency), RadioPluginKit
       module for the Amateur Radio Suite, macro import from CSV.
 
@@ -97,13 +95,17 @@ VERSION=0.1.0 scripts/build-app.sh      # universal dist/RFGEN44.app (+ dist/rfg
 scripts/install-local.sh                # build + copy to /Applications
 scripts/setup-signing-secrets.sh        # owner, interactive: export cert + set GitHub secrets
 VERSION=0.1.0 scripts/package-signed.sh # signed + notarised DMG (ad-hoc without secrets)
-git tag v0.1.0 && git push origin v0.1.0  # CI release (.github/workflows/release.yml)
+git tag v0.2.0 && git push origin v0.2.0  # CI release at a chosen version (.github/workflows/release.yml)
 ```
 
 ## Conventions
 
 - Mirrors the sibling repos (LP-700-App, SO2RBoxApp): SwiftPM, macOS 14,
-  `scripts/build-app.sh`, ad-hoc signing, `com.vu3esv.*` bundle IDs.
+  `scripts/build-app.sh`, ad-hoc signing for local builds, `com.vu3esv.*`
+  bundle IDs.
+- **Every merge to `main` ships a notarised patch release** unless it only
+  touches markdown, `docs/`, `LICENSE`, `.github/` or `.vscode/`. Keep
+  unfinished work on a branch; push a tag for a minor/major version.
 - Frequencies cross the wire as `UInt32` 10 kHz units via
   `ADF4351.tenKHzUnits` — round there, never truncate (upstream truncates,
   so 35.05 MHz goes out as 35.04; ~5 % of the 10 kHz grid is affected).

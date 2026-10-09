@@ -124,9 +124,10 @@ swift run RFGEN44App     # run the GUI from source
 swift run rfgen44 -l     # run the CLI from source
 ```
 
-Releases: push a `vX.Y.Z` tag (or run the Release workflow) and GitHub Actions
-builds, signs, notarizes and publishes the DMG. Setup is in
-[docs/SIGNING-SECRETS.md](docs/SIGNING-SECRETS.md).
+Pull requests are built and tested by CI. Merging to `main` makes GitHub
+Actions build, sign, notarize and publish the next patch release. Docs-only
+merges are skipped, and a pushed `vX.Y.Z` tag releases that exact version.
+Signing setup is in [docs/SIGNING-SECRETS.md](docs/SIGNING-SECRETS.md).
 
 See [CLAUDE.md](CLAUDE.md) for architecture and the plan, and
 [docs/PROTOCOL.md](docs/PROTOCOL.md) for the USB protocol.
