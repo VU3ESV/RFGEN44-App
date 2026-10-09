@@ -12,6 +12,9 @@ First version.
   profiles and settings.
 - `rfgen44` CLI, option-compatible with upstream `rfgen44.py`, plus
   `--readregs`, `--power`, `--aux` and `--ref`.
+- Release workflow: a `vX.Y.Z` tag builds a Developer ID-signed,
+  notarized and stapled `RFGEN44-<version>.dmg` and publishes it as a GitHub
+  Release.
 - Hardware-verified read paths on an RFGEN44 running firmware 1.5.456. A
   device left at the Qt defaults reads back the registers this project
   computes, bit for bit.

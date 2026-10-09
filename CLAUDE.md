@@ -36,8 +36,11 @@ layouts, adding a command, or debugging device behaviour.
 - [ ] M4 — Firmware 2.x: confirm macro RF-flag encoding and whether
       SET_MACRO alone enables the macro (see Open questions); then lock the
       default.
-- [ ] M5 — Distribution: Developer ID signing + notarisation, DMG, CI
-      (macOS runners cost private-repo minutes — confirm with the owner first).
+- [ ] M5 — Distribution: tag-triggered release workflow (Developer ID
+      signing, notarisation, DMG) is in place, gated on the secrets in
+      [docs/SIGNING-SECRETS.md](docs/SIGNING-SECRETS.md). Done when the
+      secrets are set and v0.1.0 ships notarised. No per-push CI: macOS
+      runners cost private-repo minutes — confirm with the owner first.
 - [ ] M6 — Optional: MenuBarExtra (RF toggle + frequency), RadioPluginKit
       module for the Amateur Radio Suite, macro import from CSV.
 
@@ -92,6 +95,8 @@ swift run RFGEN44App                    # debug GUI
 swift run rfgen44 -l -i -r              # CLI against the connected device (read-only)
 VERSION=0.1.0 scripts/build-app.sh      # universal dist/RFGEN44.app (+ dist/rfgen44)
 scripts/install-local.sh                # build + copy to /Applications
+VERSION=0.1.0 scripts/package-signed.sh # signed + notarised DMG (ad-hoc without secrets)
+git tag v0.1.0 && git push origin v0.1.0  # CI release (.github/workflows/release.yml)
 ```
 
 ## Conventions

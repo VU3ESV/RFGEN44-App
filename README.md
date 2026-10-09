@@ -11,7 +11,15 @@ It needs no drivers, hidapi or Qt.
 
 ## Install
 
-Requires macOS 14 or later. Builds a universal (Apple silicon + Intel) app.
+Requires macOS 14 or later. The app is universal (Apple silicon + Intel).
+
+**From a release:** download `RFGEN44-<version>.dmg` from
+[Releases](https://github.com/VU3ESV/RFGEN44-App/releases), open it and drag
+**RFGEN44.app** to Applications. Releases are signed with Developer ID and
+notarized by Apple. The CLI is inside the app:
+`sudo ln -sf /Applications/RFGEN44.app/Contents/Helpers/rfgen44 /usr/local/bin/rfgen44`.
+
+**From source:**
 
 ```sh
 git clone https://github.com/VU3ESV/RFGEN44-App.git
@@ -21,7 +29,7 @@ scripts/install-local.sh          # builds, installs /Applications/RFGEN44.app (
 
 Or build only: `VERSION=0.1.0 scripts/build-app.sh` → `dist/RFGEN44.app` and `dist/rfgen44`.
 
-The app is ad-hoc signed. If you copy it to another Mac, clear the
+A source build is ad-hoc signed. If you copy it to another Mac, clear the
 quarantine flag once: `xattr -dr com.apple.quarantine /Applications/RFGEN44.app`.
 
 ## Using the app
@@ -115,6 +123,10 @@ swift test               # unit tests
 swift run RFGEN44App     # run the GUI from source
 swift run rfgen44 -l     # run the CLI from source
 ```
+
+Releases: push a `vX.Y.Z` tag (or run the Release workflow) and GitHub Actions
+builds, signs, notarizes and publishes the DMG. Setup is in
+[docs/SIGNING-SECRETS.md](docs/SIGNING-SECRETS.md).
 
 See [CLAUDE.md](CLAUDE.md) for architecture and the plan, and
 [docs/PROTOCOL.md](docs/PROTOCOL.md) for the USB protocol.
