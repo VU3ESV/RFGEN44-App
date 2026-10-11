@@ -19,7 +19,9 @@ layouts, adding a command, or debugging device behaviour.
    binary, single window, menus with shortcuts.
 3. **Correct register maths**, pinned by tests and by hardware read-back.
 4. **Safe with real hardware**: never change a device's state on connect
-   unless the user asks for it.
+   unless the user asks for it. One exception, chosen by the owner: a device
+   that reports **blank** registers (no settings loaded) gets the app's
+   settings, so the display matches the output. RF on/off is never touched.
 
 ## Plan
 
@@ -32,7 +34,8 @@ layouts, adding a command, or debugging device behaviour.
       settings; `.app` packaging scripts.
 - [ ] M3 — Hardware validation of **write** paths (SET_REG, RF_CTRL,
       identify, program/erase flash, in-device sweep) with a spectrum
-      analyser; record results in CHANGELOG.
+      analyser; record results in CHANGELOG. SET_REG + RF on verified on
+      fw 2.0.501 (2026-10-11); the rest still to do.
 - [ ] M4 — Firmware 2.x: confirm macro RF-flag encoding and whether
       SET_MACRO alone enables the macro (see Open questions); then lock the
       default.
@@ -64,7 +67,11 @@ Identify counts as a write: its packet carries a full settings block.
   device re-enumerates.
 - **On connect, read — don't write.** Default `OnConnectBehavior` reads the
   live registers (`0x83`) and decodes them; upstream instead pushes its own
-  settings. Both are selectable in Settings.
+  settings. Both are selectable in Settings. If the read-back is blank
+  (`RFGenResponse.blankRegisters`: all six words `0xFFFFFFFF`), the device
+  has no settings loaded and its output matches nothing the app could show,
+  so the app writes its own (when Auto Write is on). Seen on fw 2.0.501 after
+  a firmware update erased flash: it put out ~113.37 MHz.
 - **Run IDs** guard the sweep/macro tasks in `AppModel` so a cancelled run
   can't clobber the next one.
 - **No upstream code is copied.** Upstream is CC BY-NC-ND 4.0 (no
@@ -82,8 +89,6 @@ Identify counts as a write: its packet carries a full settings block.
    `isMacroEnabled = 1`); Qt sends only SET_MACRO. We follow Python.
 3. **AUX "internal reference out".** The datasheet lists four AUX functions;
    both apps expose three (`aux_select` 0–2). Value 3 is unconfirmed.
-4. **`0x83` GET_REG on fw 2.x** — works on 1.5.456; unknown on 2.x. The app
-   tolerates a timeout.
 
 ## Commands
 

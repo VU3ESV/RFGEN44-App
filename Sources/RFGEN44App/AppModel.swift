@@ -4,7 +4,8 @@ import RFGen44Kit
 
 /// What to do with the device state when a connection opens.
 enum OnConnectBehavior: String, CaseIterable, Identifiable, Codable {
-    /// Read the live registers back and show them (non-destructive).
+    /// Read the live registers back and show them (non-destructive). A device
+    /// with no settings loaded gets the app's instead (with Auto Write on).
     case readFromDevice
     /// Push the app's settings to the device (upstream Qt behaviour).
     case applyAppSettings
@@ -284,7 +285,7 @@ final class AppModel {
         query(RFGenPacket.getBuildInfo(), expecting: .getBuildInfo)
         query(RFGenPacket.readRFControl(), expecting: .readRFControl)
         switch onConnect {
-        case .readFromDevice: readFromDevice(silent: true)
+        case .readFromDevice: readFromDevice(onConnect: true)
         case .applyAppSettings: if autoWrite { sendRegisters(solution.registers, frequencyMHz: settings.frequencyMHz) }
         case .nothing: break
         }
@@ -394,29 +395,51 @@ final class AppModel {
     }
 
     /// Loads the live registers from the device into the editor.
-    func readFromDevice(silent: Bool = false) {
+    func readFromDevice(onConnect: Bool = false) {
         guard let c = connection else { return }
         c.query(RFGenPacket.make(.getRegisters), expecting: .getRegisters) { [weak self] result in
             Task { @MainActor in
                 guard let self else { return }
                 switch result {
                 case .success(let report):
-                    guard case .registers(let regs)? = RFGenResponse(report: report),
-                          var decoded = ADF4351.decode(registers: regs, referenceMHz: self.settings.referenceMHz)
-                    else {
-                        self.setStatus("Device returned registers that could not be decoded.", error: true)
-                        return
+                    switch RFGenResponse(report: report) {
+                    case .registers(let regs)?:
+                        guard var decoded = ADF4351.decode(registers: regs, referenceMHz: self.settings.referenceMHz) else {
+                            self.setStatus("Device returned registers that could not be decoded.", error: true)
+                            return
+                        }
+                        decoded.frequencyMHz = min(max(decoded.frequencyMHz, ADF4351Limits.minFrequencyMHz), ADF4351Limits.maxFrequencyMHz)
+                        self.suppressAutoWrite = true
+                        self.settings = decoded
+                        self.suppressAutoWrite = false
+                        self.setStatus(String(format: "Loaded device state: %.2f MHz.", decoded.frequencyMHz))
+                    case .blankRegisters?:
+                        self.deviceHasNoSettings(onConnect: onConnect)
+                    default:
+                        self.setStatus("Unexpected reply to the register read.", error: true)
                     }
-                    decoded.frequencyMHz = min(max(decoded.frequencyMHz, ADF4351Limits.minFrequencyMHz), ADF4351Limits.maxFrequencyMHz)
-                    self.suppressAutoWrite = true
-                    self.settings = decoded
-                    self.suppressAutoWrite = false
-                    self.setStatus(String(format: "Loaded device state: %.2f MHz.", decoded.frequencyMHz))
                 case .failure(let error):
-                    if !silent { self.setStatus("Read failed: \(error.localizedDescription)", error: true) }
+                    if !onConnect { self.setStatus("Read failed: \(error.localizedDescription)", error: true) }
                 }
             }
         }
+    }
+
+    /// The device has no settings loaded (blank read-back, e.g. after a
+    /// firmware update erased flash), so its output matches nothing the app
+    /// could show. On connect, apply the app's settings, as upstream always
+    /// does, so the display matches the output. RF on/off is left alone.
+    private func deviceHasNoSettings(onConnect: Bool) {
+        guard onConnect else {
+            setStatus("The device has no settings loaded yet (blank read-back). Write to apply the app's.", error: true)
+            return
+        }
+        guard autoWrite else {
+            setStatus("The device has no settings loaded. Press Write to apply the app's.", error: true)
+            return
+        }
+        sendRegisters(solution.registers, frequencyMHz: settings.frequencyMHz)
+        setStatus(String(format: "The device had no settings loaded, so the app's %.2f MHz was written.", settings.frequencyMHz))
     }
 
     // MARK: Sweep (app-driven)

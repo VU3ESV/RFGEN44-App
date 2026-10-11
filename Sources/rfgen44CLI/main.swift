@@ -234,8 +234,14 @@ func run(_ o: Options) throws {
 
     if o.readRegisters {
         let reply = try c.querySync(RFGenPacket.make(.getRegisters), expecting: .getRegisters)
-        guard case .registers(let regs)? = RFGenResponse(report: reply) else { throw CLIError("Unexpected register reply") }
-        for (i, r) in regs.enumerated() { print("  R\(i) = 0x\(ADF4351.hex(r))") }
+        switch RFGenResponse(report: reply) {
+        case .registers(let regs)?:
+            for (i, r) in regs.enumerated() { print("  R\(i) = 0x\(ADF4351.hex(r))") }
+        case .blankRegisters?:
+            throw CLIError("The device has no settings loaded (blank read-back). Write a frequency first, e.g. rfgen44 -f 100 -w")
+        default:
+            throw CLIError("Unexpected register reply")
+        }
     }
 
     if o.flashWrite {
