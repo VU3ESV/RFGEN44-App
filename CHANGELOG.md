@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.1.3 — 2026-10-11
+
+- Fix: the **Settings → Factory tools** serial field had no room to type in,
+  so **Program Serial Number…** could never be enabled. Found while
+  restoring the serial number the firmware 2.0.501 update had wiped.
+
 ## 0.1.2 — 2026-10-11
 
 - **Fix: after a firmware update the display didn't match the output.**

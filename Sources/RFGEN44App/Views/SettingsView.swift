@@ -29,12 +29,18 @@ struct SettingsView: View {
             Section("Factory tools") {
                 Toggle("Show factory tools", isOn: $model.showFactoryTools)
                 if model.showFactoryTools {
-                    HStack {
-                        TextField("Serial (hex)", text: $serialText)
-                            .font(.system(.body, design: .monospaced))
-                            .frame(width: 120)
-                        Button("Program Serial Number…") { confirmSerial = true }
-                            .disabled(parsedSerial == nil || !model.isConnected)
+                    // The label sits in LabeledContent: a titled TextField in a
+                    // grouped Form puts its title inside the field's own frame,
+                    // which left no room to type.
+                    LabeledContent("Serial (hex)") {
+                        HStack {
+                            TextField("Serial (hex)", text: $serialText, prompt: Text("003FC"))
+                                .labelsHidden()
+                                .font(.system(.body, design: .monospaced))
+                                .frame(width: 90)
+                            Button("Program Serial Number…") { confirmSerial = true }
+                                .disabled(parsedSerial == nil || !model.isConnected)
+                        }
                     }
                     Text("Writes a new USB serial number (0–FFFFF hex). Intended for production only.")
                         .font(.caption).foregroundStyle(.secondary)
