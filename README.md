@@ -109,9 +109,16 @@ adds menus and keyboard shortcuts.
 - **Verified on a real RFGEN44 (firmware 1.5.456):** enumeration, firmware
   query, RF state query and register read-back. The read-back matches this
   project's register calculation bit for bit.
-- **Not yet verified on hardware:** the write paths (set frequency, RF
-  on/off, identify, program/erase flash, sweeps). They follow the upstream
-  protocol byte for byte and are covered by unit tests.
+- **Verified on firmware 2.0.501:** set frequency and RF on, measured on a
+  spectrum analyser at 100, 433.92, 1000 and 2400 MHz (all within 0.3 ppm),
+  and register read-back.
+- **Not yet verified on hardware:** identify, program/erase flash and
+  sweeps. They follow the upstream protocol byte for byte and are covered by
+  unit tests.
+- **After a firmware update** the device may have no settings loaded. It
+  then puts out a frequency nothing describes (~113 MHz on 2.0.501). On
+  connect the app detects this and writes its own settings, so the display
+  matches the output.
 - **Firmware 2.x macros:** the upstream tools disagree on how a step's RF
   state is encoded. If a macro programmed to flash runs with RF inverted,
   change **Settings → Macro → RF flag encoding**.

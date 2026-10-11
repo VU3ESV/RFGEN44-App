@@ -14,7 +14,7 @@ struct SettingsView: View {
                 Picker("When a device connects", selection: $model.onConnect) {
                     ForEach(OnConnectBehavior.allCases) { Text($0.label).tag($0) }
                 }
-                Text("“Read settings” keeps a device running from flash untouched. “Apply app settings” matches the upstream Qt app, which pushes its settings on connect.")
+                Text("“Read settings” keeps a device running from flash untouched. If the device has no settings loaded (e.g. after a firmware update), the app's are written instead, so the display matches the output. “Apply app settings” matches the upstream Qt app, which pushes its settings on connect.")
                     .font(.caption).foregroundStyle(.secondary)
             }
 

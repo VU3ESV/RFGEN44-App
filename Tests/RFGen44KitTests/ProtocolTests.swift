@@ -87,6 +87,33 @@ final class ProtocolTests: XCTestCase {
         XCTAssertNil(RFGenResponse(report: []))
     }
 
+    /// Captured from an RFGEN44 on firmware 2.0.501 after writing 2400.00 MHz:
+    /// six registers, then the rest of the settings block (frequency 240000,
+    /// ref 2500, …) and trailing bytes.
+    func testFirmware2RegisterReply() {
+        let reply: [UInt8] = [
+            0x83, 0x00, 0x00, 0x60, 0x09, 0x11, 0x80, 0x00, 0x08, 0x42, 0x8E, 0x0C, 0x00, 0xB3, 0x04, 0x00,
+            0x00, 0x3C, 0x40, 0x80, 0x00, 0x05, 0x00, 0x58, 0x00, 0x80, 0xA9, 0x03, 0x00, 0xC4, 0x09, 0x00,
+            0x00, 0x10, 0x27, 0x00, 0x00, 0x50, 0xC3, 0x00, 0x00, 0x10, 0x27, 0x00, 0x00, 0xF4, 0x01, 0x00,
+            0x00, 0x00, 0x01, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x83, 0x09, 0xB5, 0xD0, 0x1A, 0x04, 0x21,
+        ]
+        let regs: [UInt32] = [0x0960_0000, 0x0800_8011, 0x000C_8E42, 0x0000_04B3, 0x0080_403C, 0x0058_0005]
+        XCTAssertEqual(RFGenResponse(report: reply), .registers(regs))
+        XCTAssertEqual(ADF4351.decode(registers: regs, referenceMHz: 25)?.frequencyMHz, 2400)
+    }
+
+    /// Firmware 2.0.501 straight after a firmware update (flash erased, nothing
+    /// written since power-up) answers GET_REG with every register 0xFFFFFFFF.
+    /// That is "no settings loaded", not registers to decode.
+    func testBlankRegisterReply() {
+        let blank = [0x83] + [UInt8](repeating: 0xFF, count: 56) + [UInt8](repeating: 0, count: 7)
+        XCTAssertEqual(RFGenResponse(report: blank), .blankRegisters)
+        // One real word among the 0xFF ones is still a register reply.
+        var partial = blank
+        partial[1...4] = [0x00, 0x00, 0x60, 0x09]
+        guard case .registers? = RFGenResponse(report: partial) else { return XCTFail("expected .registers") }
+    }
+
     func testFirmwareMacroSupport() {
         XCTAssertFalse(FirmwareInfo(major: 1, minor: 3, build: 78).supportsMacros)
         XCTAssertTrue(FirmwareInfo(major: 2, minor: 0, build: 1).supportsMacros)

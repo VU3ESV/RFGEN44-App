@@ -168,6 +168,10 @@ public enum RFGenResponse: Equatable, Sendable {
     case rfStatus(RFStatus)
     case firmware(FirmwareInfo)
     case registers([UInt32])
+    /// GET_REG with every register 0xFFFFFFFF: the device has no settings
+    /// loaded (fw 2.0.501 after a firmware update erased flash, before any
+    /// write). Its output is then not something the registers describe.
+    case blankRegisters
     case other(command: UInt8)
 
     public init?(report: [UInt8]) {
@@ -180,7 +184,8 @@ public enum RFGenResponse: Equatable, Sendable {
                                           build: Int(report[3]) << 8 | Int(report[4])))
         case .getRegisters where report.count >= 25:
             var r = ByteReader(report, offset: 1)
-            self = .registers((0..<6).map { _ in r.u32() })
+            let regs = (0..<6).map { _ in r.u32() }
+            self = regs.allSatisfy { $0 == .max } ? .blankRegisters : .registers(regs)
         default:
             self = .other(command: cmd)
         }

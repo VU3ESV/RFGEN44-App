@@ -26,7 +26,7 @@ Reverse-documented from the upstream sources at
 | `0x80` | SET_REG          | settings block (56 B)                              | —                                     | Qt, Py  |
 | `0x81` | RF_CTRL          | `[on]` (1/0) — drives the PDBRF pin                | —                                     | Qt, Py  |
 | `0x82` | READ_RF_CTRL     | —                                                  | `[0x82, rfOn, busy]`                  | Qt, Py  |
-| `0x83` | GET_REG          | —                                                  | `[0x83, reg0..reg5 u32 LE]`           | fw source only; works on fw 1.5 |
+| `0x83` | GET_REG          | —                                                  | `[0x83, reg0..reg5 u32 LE]`; fw 2.0.501 follows with the rest of the settings block. All `0xFF` = no settings loaded | fw source only; works on fw 1.5.456 and 2.0.501 |
 | `0x84` | DEVICE_CTRL      | `[writeFlash, identify, erase, settings block]`    | —                                     | Qt, Py  |
 | `0x85` | SET_SERIAL_INFO  | `[serial u32 LE]` (factory)                        | —                                     | Qt (PRODUCTION build) |
 | `0x86` | SET_MACRO        | `[blockIndex, macro block (56 B)]` — fw 2.0+       | —                                     | Qt, Py  |
@@ -78,3 +78,14 @@ floating-point version can get wrong.
 Verified on hardware: a device left at the Qt defaults reads back
 `0C800000 08008011 000C8E42 000004B3 00D0403C 00580005` via `0x83`, identical
 to `ADF4351.solve(ADF4351Settings())`.
+
+Firmware 2.0.501 (2026-10-11):
+
+- After writing 2400.00 MHz, `0x83` returns
+  `09600000 08008011 000C8E42 000004B3 0080403C 00580005`, then frequency
+  240000, ref 2500 and the rest of the block (`ProtocolTests.testFirmware2RegisterReply`).
+- Straight after the firmware update (flash erased) and before any write,
+  every register reads `0xFFFFFFFF`. The device has no settings loaded and
+  puts out ~113.37 MHz. Apps parse this as `RFGenResponse.blankRegisters`.
+- Frequencies written with SET_REG measured on a spectrum analyser:
+  100.00, 433.92, 1000.00 and 2400.00 MHz all within 0.3 ppm.
